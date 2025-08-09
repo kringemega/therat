@@ -54,7 +54,7 @@ def start_client(server_ip, server_port):
         client.close()
 if __name__ == "__main__":
     SERVER_IP = "127.0.0.1" 
-    SERVER_PORT = '8000'
+    SERVER_PORT = 5555
     
     try:
         start_client(SERVER_IP, SERVER_PORT)
