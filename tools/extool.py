@@ -7,6 +7,8 @@ def run_file(file_path):
     try:
         # Удаление кавычек из пути
         file_path = file_path.strip('"')
+        if not os.path.exists(file_path):
+            return f"File not found: {file_path}"
         subprocess.Popen([file_path])
         return f"File {file_path} started successfully"
     except Exception as e:
@@ -16,9 +18,13 @@ def install_file(file_path):
     try:
         # Удаление кавычек из пути
         file_path = file_path.strip('"')
-        target_directory = os.path.expanduser("~\\Documents")
+        if not os.path.exists(file_path):
+            return f"File not found: {file_path}"
+        target_directory = os.path.join("C:\\", "FRAT")
+        if not os.path.exists(target_directory):
+            os.makedirs(target_directory)
         shutil.copy(file_path, target_directory)
-        return f"File {file_path} copied to Documents successfully"
+        return f"File {file_path} copied to C:\\FRAT successfully"
     except Exception as e:
         return f"Error copying file: {str(e)}"
 
