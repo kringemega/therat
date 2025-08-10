@@ -18,7 +18,7 @@ def logo():
 
 def handle_client(client_socket, addr):
     clients[addr] = client_socket
-    ctypes.windll.kernel32.SetConsoleTitleW(f"SC RAT | CONNECTED CLIENTS: {len(clients)}")
+    ctypes.windll.kernel32.SetConsoleTitleW(f"FRAT | CONNECTED CLIENTS: {len(clients)}")
     
     while True:
         try:
