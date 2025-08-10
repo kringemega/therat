@@ -5,7 +5,6 @@ import shutil
 
 def run_file(file_path):
     try:
-        # Удаление кавычек из пути
         file_path = file_path.strip('"')
         if not os.path.exists(file_path):
             return f"File not found: {file_path}"
@@ -16,7 +15,6 @@ def run_file(file_path):
 
 def install_file(file_path):
     try:
-        # Удаление кавычек из пути
         file_path = file_path.strip('"')
         if not os.path.exists(file_path):
             return f"File not found: {file_path}"
@@ -38,10 +36,24 @@ def list_directory(directory):
                 files_and_dirs.append(os.path.relpath(os.path.join(root, name), directory))
             for name in dirs:
                 files_and_dirs.append(os.path.relpath(os.path.join(root, name), directory))
-            break  # Останавливаемся после первого уровня вложенности
+            break
         return "\n".join(files_and_dirs)
     except Exception as e:
         return f"Error listing directory: {str(e)}"
+
+def open_remote_file(filepath):
+    """Открытие файла через стандартные средства ОС"""
+    try:
+        if not os.path.exists(filepath):
+            return f"File not found: {filepath}"
+        if sys.platform == "win32":
+            os.startfile(filepath)
+        else:
+            opener = "open" if sys.platform == "darwin" else "xdg-open"
+            subprocess.call([opener, filepath])
+        return f"File {filepath} opened successfully"
+    except Exception as e:
+        return f"Error opening file: {str(e)}"
 
 def main():
     if len(sys.argv) < 2:
@@ -70,6 +82,13 @@ def main():
         else:
             directory = ""
         print(list_directory(directory))
+
+    elif command == "open":
+        if len(sys.argv) < 3:
+            print("Usage: extool open <file_path>")
+            sys.exit(1)
+        file_path = sys.argv[2]
+        print(open_remote_file(file_path))
 
     else:
         print("Unknown command")
