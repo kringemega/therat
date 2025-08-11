@@ -2,7 +2,7 @@ import subprocess
 import os
 import sys
 import shutil
-
+import psutil
 def run_file(file_path):
     try:
         file_path = file_path.strip('"')
@@ -55,6 +55,89 @@ def open_remote_file(filepath):
     except Exception as e:
         return f"Error opening file: {str(e)}"
 
+def force_kill_process(process_identifier):
+    """Принудительно завершить процесс"""
+    try:
+        pid = int(process_identifier)
+        try:
+            proc = psutil.Process(pid)
+            proc.kill()  # Жёсткое завершение
+            return f"Процесс {pid} ({proc.name()}) принудительно завершён"
+        except psutil.NoSuchProcess:
+            return f"Процесс с PID {pid} не найден"
+    except ValueError:
+        # Для имён процессов
+        killed = []
+        for proc in psutil.process_iter(['pid', 'name']):
+            try:
+                if proc.info['name'].lower() == process_identifier.lower():
+                    proc.kill()
+                    killed.append(proc.info['pid'])
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+        
+        if killed:
+            return f"Принудительно завершено процессов: {len(killed)} (PIDs: {', '.join(map(str, killed))})"
+        else:
+            return f"Процессы с именем '{process_identifier}' не найдены"
+def list_processes():
+    """Получить список всех процессов"""
+    processes = []
+    for proc in psutil.process_iter(['pid', 'name', 'username', 'status']):
+        try:
+            processes.append({
+                'pid': proc.info['pid'],
+                'name': proc.info['name'],
+                'user': proc.info['username'] or 'SYSTEM',
+                'status': proc.info['status']
+            })
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            continue
+    
+    # Сортируем по PID
+    processes.sort(key=lambda x: x['pid'])
+    
+    # Форматируем вывод
+    result = ["{:<8} {:<25} {:<20} {:<10}".format("PID", "Имя", "Пользователь", "Статус")]
+    result.append("-" * 65)
+    for p in processes:
+        result.append("{:<8} {:<25} {:<20} {:<10}".format(
+            p['pid'], 
+            p['name'][:24], 
+            p['user'][:19], 
+            p['status']
+        ))
+    return "\n".join(result)
+
+def list_processes():
+    """Получить список всех процессов"""
+    processes = []
+    for proc in psutil.process_iter(['pid', 'name', 'username', 'status']):
+        try:
+            processes.append({
+                'pid': proc.info['pid'],
+                'name': proc.info['name'],
+                'user': proc.info['username'] or 'SYSTEM',
+                'status': proc.info['status']
+            })
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            continue
+    
+    # Сортируем по PID
+    processes.sort(key=lambda x: x['pid'])
+    
+    # Форматируем вывод
+    result = ["{:<8} {:<25} {:<20} {:<10}".format("PID", "Имя", "Пользователь", "Статус")]
+    result.append("-" * 65)
+    for p in processes:
+        result.append("{:<8} {:<25} {:<20} {:<10}".format(
+            p['pid'], 
+            p['name'][:24], 
+            p['user'][:19], 
+            p['status']
+        ))
+    return "\n".join(result)
+
 def main():
     if len(sys.argv) < 2:
         print("Usage: extool <command> [<args>]")
@@ -89,6 +172,14 @@ def main():
             sys.exit(1)
         file_path = sys.argv[2]
         print(open_remote_file(file_path))
+    elif command == "fkill":
+        if len(sys.argv) < 3:
+            print("Usage: extool fkill <name|pid>")
+            sys.exit(1)
+        identifier = sys.argv[2]
+        print(force_kill_process(identifier))
+    elif command == "ps":
+        print(list_processes())
 
     else:
         print("Unknown command")
