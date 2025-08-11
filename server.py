@@ -7,14 +7,13 @@ import ctypes
 clients = {}
 
 def logo():
-    print(f"{Fore.GREEN}/$$$$$$  /$$$$$$  /$$$$$$  /$$$$$$  /$$$$$$$ ")
-    print(f"{Fore.GREEN}| $$__  $$|_  $$_/|_  $$_/|_  $$_/| $$__  $$")
-    print(f"{Fore.GREEN}| $$  \ $$  | $$    | $$    | $$  | $$  \ $$")
-    print(f"{Fore.GREEN}| $$$$$$$$  | $$    | $$    | $$  | $$$$$$$/")
-    print(f"{Fore.GREEN}| $$__  $$  | $$    | $$    | $$  | $$____/ ")
-    print(f"{Fore.GREEN}| $$  | $$  | $$    | $$    | $$  | $$      ")
-    print(f"{Fore.GREEN}| $$  | $$ /$$$$$$ /$$$$$$ /$$$$$$| $$      ")
-    print(f"{Fore.GREEN}|__/  |__/|______/|______/|______/|__/      {Fore.RESET}")
+    print(f"{Fore.GREEN}███████╗██████╗░░█████╗░████████╗")
+    print(f"{Fore.GREEN}██╔════╝██╔══██╗██╔══██╗╚══██╔══╝")
+    print(f"{Fore.GREEN}█████╗░░██████╔╝███████║░░░██║░░░")
+    print(f"{Fore.GREEN}██╔══╝░░██╔══██╗██╔══██║░░░██║░░░")
+    print(f"{Fore.GREEN}██║░░░░░██║░░██║██║░░██║░░░██║░░░   ")
+    print(f"{Fore.GREEN}╚═╝░░░░░╚═╝░░╚═╝╚═╝░░╚═╝░░░╚═╝░░░")
+    print(f"{Fore.GREEN}{Fore.RESET}")
 
 def handle_client(client_socket, addr):
     clients[addr] = client_socket
@@ -26,7 +25,7 @@ def handle_client(client_socket, addr):
             if not response:
                 break
             print(f"{Fore.GREEN}[{addr[0]} Output]: {Fore.RESET}{response}")
-        except (ConnectionResetError, BrokenPipeError):
+        except (ConnectionResetError    , BrokenPipeError):
             break
     
     print(f"\n{Fore.RED}[!] {Fore.RESET} | Client {addr[0]} disconnected.")
