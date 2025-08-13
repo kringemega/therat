@@ -159,6 +159,7 @@ class ClientApp:
             self.client_root = tk.Tk()
             self.client_root.title("Client Application")
             
+            # Чат
             self.chat_frame = tk.Frame(self.client_root)
             self.chat_frame.pack(pady=10)
             
@@ -172,12 +173,17 @@ class ClientApp:
             self.send_btn = tk.Button(self.chat_frame, text="Send", command=self.send_message)
             self.send_btn.pack(padx=10, pady=5)
             
+            # Визуализатор аудио
             self.visualizer_frame = tk.Frame(self.client_root)
             self.visualizer_frame.pack(pady=10)
             
             self.client_visualizer = MicrophoneVisualizer(self.visualizer_frame)
             self.client_visualizer.connection = self.client_socket
             
+            # Обработчик закрытия окна
+            self.client_root.protocol("WM_DELETE_WINDOW", self.on_close)
+            
+            # Запускаем прием сообщений
             self.start_receiver()
             self.client_root.mainloop()
             
@@ -203,27 +209,23 @@ class ClientApp:
                     msg = self.client_socket.recv(1024).decode()
                     if not msg:
                         break
+                        
+                    # Если сервер запускает чат
+                    if msg == "chat":
+                        self.chat_text.insert(tk.END, "Chat session started with server\n")
+                        continue
+                        
                     self.chat_text.insert(tk.END, f"[Server]: {msg}\n")
                 except ConnectionError:
                     self.chat_text.insert(tk.END, "Disconnected from server\n")
                     break
 
         threading.Thread(target=receive_messages, daemon=True).start()
-
-def start_as_server():
-    ServerApp()
-
-def start_as_client():
-    server_ip = simpledialog.askstring("Server IP", "Enter server IP address:", initialvalue="localhost")
-    if server_ip:
-        ClientApp(server_ip)
-
-if __name__ == "__main__":
-    root = tk.Tk()
-    root.withdraw()
-    
-    choice = messagebox.askquestion("Select Mode", "Run as server?", icon='question')
-    if choice == 'yes':
-        start_as_server()
-    else:
-        start_as_client()
+        
+    def on_close(self):
+        """Обработчик закрытия окна"""
+        try:
+            self.client_socket.close()
+        except:
+            pass
+        self.client_root.destroy()
