@@ -1,42 +1,46 @@
 import subprocess
+import re
 
-def get_wifi_ssid():
+def get_wifi_passwords():
+    """Получает все сохранённые Wi-Fi сети и их пароли."""
     try:
-        # Выполняем команду для получения информации о текущем подключении
-        result = subprocess.run(['netsh', 'wlan', 'show', 'interfaces'], capture_output=True, text=True, encoding='utf-8')
-        output = result.stdout
-
-        # Ищем строку, содержащую SSID
-        for line in output.split('\n'):
-            if 'SSID' in line:
-                ssid = line.split(':')[1].strip()
-                return ssid
+        # Получаем список всех Wi-Fi профилей
+        profiles_output = subprocess.run(
+            ['netsh', 'wlan', 'show', 'profiles'],
+            capture_output=True,
+            text=True,
+            check=True
+        ).stdout
+        
+        profiles = re.findall(r"Все профили пользователей\s*:\s(.*)", profiles_output)
+        if not profiles:
+            return {"error": "No Wi-Fi profiles found."}
+        
+        wifi_data = {}
+        for profile in profiles:
+            profile = profile.strip()
+            if not profile:
+                continue
+            
+            # Получаем пароль для каждого профиля
+            password_output = subprocess.run(
+                ['netsh', 'wlan', 'show', 'profile', profile, 'key=clear'],
+                capture_output=True,
+                text=True,
+                check=True
+            ).stdout
+            
+            password_match = re.search(r"Содержимое ключа\s*:\s(.*)", password_output)
+            password = password_match.group(1).strip() if password_match else "No password"
+            wifi_data[profile] = password
+        
+        return wifi_data
+    
     except Exception as e:
-        return str(e)
+        return {"error": f"Failed to get Wi-Fi passwords: {str(e)}"}
 
-def get_wifi_password(ssid):
-    try:
-        # Выполняем команду для получения пароля Wi-Fi
-        result = subprocess.run(['netsh', 'wlan', 'show', 'profile', ssid, 'key=clear'], capture_output=True, text=True, encoding='utf-8')
-        output = result.stdout
-
-        # Выводим весь вывод для отладки
-        print("Вывод команды netsh:")
-        print(output)
-
-        # Ищем строку, содержащую ключ
-        for line in output.split('\n'):
-            if 'Key Content' in line:
-                password = line.split(':')[1].strip()
-                return password
-    except Exception as e:
-        return str(e)
-
-# Получаем SSID текущего подключения
-ssid = get_wifi_ssid()
-if ssid:
-    # Получаем пароль для текущего SSID
-    password = get_wifi_password(ssid)
-    print(f"Пароль для SSID {ssid}: {password}")
-else:
-    print("Не удалось получить SSID текущего подключения.")
+# Пример использования (можно вызвать из server.py)
+if __name__ == "__main__":
+    wifi_passwords = get_wifi_passwords()
+    for wifi, password in wifi_passwords.items():
+        print(f"Wi-Fi: {wifi}\nPassword: {password}\n")
